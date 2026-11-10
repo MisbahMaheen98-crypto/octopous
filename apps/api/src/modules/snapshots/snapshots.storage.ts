@@ -42,50 +42,98 @@ export const allowedArchiveContentTypes = new Set(Object.keys(extensionByContent
 export class LocalSnapshotStorage implements SnapshotStorage {
   private readonly rootDir = path.resolve(env.SNAPSHOT_STORAGE_LOCAL_ROOT);
 
- async storeArchive(input: StoreSnapshotArchiveInput): Promise<StoreSnapshotArchiveResult> {
-  const fileExtension = extensionByContentType[input.contentType];
+  async storeArchive(input: StoreSnapshotArchiveInput): Promise<StoreSnapshotArchiveResult> {
+    const fileExtension = extensionByContentType[input.contentType];
 
-  if (!fileExtension) {
-    throw new HttpError(
-      400,
-      'SNAPSHOT_UNSUPPORTED_ARCHIVE_TYPE',
-      'Unsupported archive content type',
+    if (!fileExtension) {
+      throw new HttpError(
+        400,
+        'SNAPSHOT_UNSUPPORTED_ARCHIVE_TYPE',
+        'Unsupported archive content type',
+      );
+    }
+
+    const relativeStorageKey = assertSafeRelativePath(
+      `${input.ownerId}/${input.projectId}/${input.snapshotId}/project.${fileExtension}`,
     );
+
+    const absolutePath = this.toSafeStoragePath(relativeStorageKey);
+
+    await mkdir(path.dirname(absolutePath), { recursive: true });
+    await writeFile(absolutePath, encryptSnapshotArchive(input.buffer));
+
+    // Calculate the hash directly from the existing buffer.
+    // This avoids reading the entire saved archive back into memory.
+    const hash = createHash('sha256')
+      .update(input.buffer)
+      .digest('hex');
+
+    return {
+      storageKey: relativeStorageKey,
+      sizeBytes: input.buffer.byteLength,
+      integrityAlgorithm: 'sha256',
+      integrityHash: hash,
+    };
   }
-
-  const relativeStorageKey = assertSafeRelativePath(
-    `${input.ownerId}/${input.projectId}/${input.snapshotId}/project.${fileExtension}`,
-  );
-
-  const absolutePath = this.toSafeStoragePath(relativeStorageKey);
-
-  await mkdir(path.dirname(absolutePath), { recursive: true });
-  await writeFile(absolutePath, encryptSnapshotArchive(input.buffer));
-
-  // Calculate the hash directly from the existing buffer.
-  // This avoids reading the entire saved archive back into memory.
-  const hash = createHash('sha256')
-    .update(input.buffer)
-    .digest('hex');
-
-  return {
-    storageKey: relativeStorageKey,
-    sizeBytes: input.buffer.byteLength,
-    integrityAlgorithm: 'sha256',
-    integrityHash: hash,
-  };
-}
 
   async deleteArchive(storageKey: string): Promise<void> {
     const safeStorageKey = assertSafeRelativePath(storageKey);
-    const absolutePath = this.toSafeStoragePath(safeStorageKey);
-    await rm(absolutePath, { force: true });
+    const candidatePaths = this.getCandidateStoragePaths(safeStorageKey);
+    for (const candidatePath of candidatePaths) {
+      await rm(candidatePath, { force: true }).catch(() => undefined);
+    }
   }
 
   async readArchive(storageKey: string): Promise<Buffer> {
     const safeStorageKey = assertSafeRelativePath(storageKey);
-    const absolutePath = this.toSafeStoragePath(safeStorageKey);
-    return decryptSnapshotArchive(await readFile(absolutePath));
+    const candidatePaths = this.getCandidateStoragePaths(safeStorageKey);
+
+    let lastError: any = null;
+    for (const candidatePath of candidatePaths) {
+      try {
+        const encrypted = await readFile(candidatePath);
+        return decryptSnapshotArchive(encrypted);
+      } catch (error: any) {
+        lastError = error;
+        if (error?.code !== 'ENOENT') {
+          console.warn(`[LocalSnapshotStorage] Error reading/decrypting candidate ${candidatePath}:`, error?.message);
+        }
+      }
+    }
+
+    const primaryPath = this.toSafeStoragePath(safeStorageKey);
+    try {
+      const encrypted = await readFile(primaryPath);
+      return decryptSnapshotArchive(encrypted);
+    } catch (primaryError: any) {
+      if (lastError && primaryError?.code === 'ENOENT') {
+        throw lastError;
+      }
+      throw primaryError;
+    }
+  }
+
+  private getCandidateStoragePaths(storageKey: string): string[] {
+    const primary = this.toSafeStoragePath(storageKey);
+    const candidates = [primary];
+
+    const fallbackRoots = [
+      path.resolve(process.cwd(), 'apps/api/.octopus-storage/snapshots'),
+      path.resolve(process.cwd(), '.octopus-storage/snapshots'),
+      path.resolve(process.cwd(), '../apps/api/.octopus-storage/snapshots'),
+      path.resolve(process.cwd(), '../.octopus-storage/snapshots'),
+      path.resolve(process.cwd(), '../../apps/api/.octopus-storage/snapshots'),
+      path.resolve(process.cwd(), '../../.octopus-storage/snapshots'),
+    ];
+
+    for (const fallbackRoot of fallbackRoots) {
+      const resolved = path.resolve(fallbackRoot, storageKey);
+      if (!candidates.includes(resolved)) {
+        candidates.push(resolved);
+      }
+    }
+
+    return candidates;
   }
 
   private toSafeStoragePath(storageKey: string) {

@@ -72,7 +72,9 @@ export class AuthService {
     return {
       user: this.repository.toPublicUser(user),
       otpSent: true,
-      ...('deliveryMode' in otpDelivery
+      ...(env.NODE_ENV !== 'production' &&
+      'deliveryMode' in otpDelivery &&
+      otpDelivery.deliveryMode === 'DEVELOPMENT_FALLBACK'
         ? {
             developmentOtp: otpDelivery.developmentOtp,
             deliveryMode: otpDelivery.deliveryMode,
@@ -123,7 +125,9 @@ export class AuthService {
 
     return {
       otpSent: true,
-      ...('deliveryMode' in otpDelivery
+      ...(env.NODE_ENV !== 'production' &&
+      'deliveryMode' in otpDelivery &&
+      otpDelivery.deliveryMode === 'DEVELOPMENT_FALLBACK'
         ? {
             developmentOtp: otpDelivery.developmentOtp,
             deliveryMode: otpDelivery.deliveryMode,

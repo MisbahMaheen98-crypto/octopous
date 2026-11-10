@@ -16,6 +16,7 @@ import { buildDirectoryTreeFromZip } from './snapshots.directory-tree.js';
 import { buildSanitizedSnapshotZip, buildSnapshotDownloadFileName } from './snapshots.download.js';
 import { assertSnapshotTransition } from './snapshots.lifecycle.js';
 import { SnapshotsRepository } from './snapshots.repository.js';
+import { projectEventBus } from '../projects/projects.events.js';
 import {
   allowedArchiveContentTypes,
   type SnapshotStorage,
@@ -417,7 +418,7 @@ export class SnapshotsService {
   ) {}
 
   async createSnapshot(ownerId: string, projectId: string, input: SnapshotCreateInput) {
-    await this.assertProjectOwnership(ownerId, projectId);
+    await this.assertProjectOwnership(ownerId, projectId, true);
     this.assertSnapshotLimits(input);
     this.assertSnapshotEntries(input.entries);
 
@@ -469,6 +470,9 @@ export class SnapshotsService {
     if (!completed) {
       throw new HttpError(404, 'SNAPSHOT_NOT_FOUND', 'Snapshot not found');
     }
+
+    if (typeof (this.repository as any).recordActivity === 'function') { await (this.repository as any).recordActivity(projectId, ownerId, 'SNAPSHOT_CREATED', { snapshotId: completed.id, fileCount: completed.fileCount, captureSource: completed.captureSource }); }
+    projectEventBus.publish(projectId, { type: 'SNAPSHOT_CREATED', userId: ownerId, data: { snapshot: this.toPublicSnapshot(completed) } });
 
     return this.toPublicSnapshot(completed);
   }
@@ -731,12 +735,35 @@ export class SnapshotsService {
     await this.transitionBlueprintStatus(blueprint.snapshotId, blueprint.status, 'PROCESSING');
 
     try {
-      const archiveBuffer = await this.storage.readArchive(snapshot.archiveStorageKey);
+      let archiveBuffer: Buffer | null = null;
+      try {
+        archiveBuffer = await this.storage.readArchive(snapshot.archiveStorageKey);
+      } catch (storageError: any) {
+        console.warn(
+          `[SnapshotsService] Snapshot archive could not be read from storage (${snapshot.archiveStorageKey}): ${storageError?.message}. Falling back to directory tree metadata.`,
+        );
+      }
+
       const metadata = this.parseCaptureMetadata(snapshot.captureMetadata);
-      const directoryTree = this.getDirectoryTreeFromMetadata(metadata);
+      let directoryTree = this.getDirectoryTreeFromMetadata(metadata);
+      if (!directoryTree && metadata && typeof metadata === 'object') {
+        if ('nodes' in metadata && Array.isArray((metadata as any).nodes)) {
+          directoryTree = metadata as any;
+        } else if ('directoryTree' in metadata && typeof (metadata as any).directoryTree === 'object') {
+          directoryTree = (metadata as any).directoryTree;
+        }
+      }
+
+      if (!archiveBuffer && !directoryTree) {
+        throw new HttpError(
+          400,
+          'SNAPSHOT_ARCHIVE_MISSING',
+          'Snapshot archive file is missing and directory tree metadata is unavailable for blueprint analysis',
+        );
+      }
 
       const analysis = await analyzeBlueprintFromSnapshot({
-        archiveBuffer,
+        archiveBuffer: archiveBuffer ?? Buffer.alloc(0),
         maxPathLength: env.SNAPSHOT_MAX_PATH_LENGTH,
         directoryTree,
       });
@@ -760,6 +787,7 @@ export class SnapshotsService {
         metadata: analysis.metadata,
       });
     } catch (error) {
+      console.error('[SnapshotsService] Blueprint processing error:', error);
       const failureCode = error instanceof HttpError ? error.code : 'BLUEPRINT_PROCESSING_FAILED';
       const failureReason = error instanceof Error ? error.message.slice(0, 500) : 'Blueprint processing failed';
 
@@ -774,7 +802,7 @@ export class SnapshotsService {
         throw error;
       }
 
-      throw new HttpError(500, 'BLUEPRINT_PROCESSING_FAILED', 'Blueprint processing failed');
+      throw new HttpError(500, 'BLUEPRINT_PROCESSING_FAILED', failureReason);
     }
 
     const persisted = await this.repository.findBlueprintBySnapshotId(projectId, snapshotId);
@@ -817,7 +845,12 @@ export class SnapshotsService {
     };
   }
 
-  async downloadSnapshotAsZip(ownerId: string, projectId: string, snapshotId: string) {
+  async downloadSnapshotAsZip(
+    ownerId: string,
+    projectId: string,
+    snapshotId: string,
+    options?: { raw?: boolean },
+  ) {
     const snapshot = await this.findAuthorizedSnapshot(ownerId, projectId, snapshotId);
 
     if (snapshot.status !== 'COMPLETED') {
@@ -840,21 +873,50 @@ export class SnapshotsService {
     let archiveBuffer: Buffer;
     try {
       archiveBuffer = await this.storage.readArchive(snapshot.archiveStorageKey);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof HttpError) {
         throw error;
       }
 
-      throw new HttpError(500, 'SNAPSHOT_DOWNLOAD_FAILED', 'Failed to read snapshot archive');
+      if (error?.code === 'ENOENT') {
+        throw new HttpError(
+          404,
+          'SNAPSHOT_ARCHIVE_NOT_FOUND',
+          `Snapshot archive '${snapshot.archiveStorageKey}' was not found in storage. It may have been stored on an ephemeral server instance or moved.`,
+        );
+      }
+
+      throw new HttpError(500, 'SNAPSHOT_DOWNLOAD_FAILED', `Failed to read snapshot archive: ${error?.message || error}`);
+    }
+
+    const project = await this.repository.findProjectByIdForOwner(ownerId, projectId);
+    const projectName = (project as { name?: string | null } | null)?.name ?? null;
+
+    if (options?.raw) {
+      await this.repository.createAuditLog({
+        userId: ownerId,
+        action: 'SNAPSHOT_DOWNLOADED',
+        metadata: {
+          projectId,
+          snapshotId,
+          raw: true,
+          totalFileCount: snapshot.fileCount ?? 0,
+        },
+      });
+
+      return {
+        buffer: archiveBuffer,
+        contentType: 'application/zip',
+        fileName: buildSnapshotDownloadFileName(projectName, snapshotId),
+        sanitizedFileCount: 0,
+        totalFileCount: snapshot.fileCount ?? 0,
+      };
     }
 
     const sanitized = await buildSanitizedSnapshotZip({
       archiveBuffer,
       maxPathLength: env.SNAPSHOT_MAX_PATH_LENGTH,
     });
-
-    const project = await this.repository.findProjectByIdForOwner(ownerId, projectId);
-    const projectName = (project as { name?: string | null } | null)?.name ?? null;
 
     await this.repository.createAuditLog({
       userId: ownerId,
@@ -928,10 +990,13 @@ export class SnapshotsService {
     return snapshot as SnapshotWithBlueprintRecord;
   }
 
-  private async assertProjectOwnership(ownerId: string, projectId: string) {
+  private async assertProjectOwnership(ownerId: string, projectId: string, requireWrite = false) {
     const project = await this.repository.findProjectByIdForOwner(ownerId, projectId);
     if (!project) {
       throw new HttpError(404, 'PROJECT_NOT_FOUND', 'Project not found');
+    }
+    if (requireWrite && (project as any).members?.[0]?.role === 'VIEWER') {
+      throw new HttpError(403, 'FORBIDDEN', 'Viewers cannot create or modify snapshots');
     }
   }
 
@@ -941,11 +1006,19 @@ export class SnapshotsService {
     }
 
     if (input.archive.sizeBytes > env.SNAPSHOT_MAX_ARCHIVE_SIZE_BYTES) {
-      throw new HttpError(413, 'SNAPSHOT_ARCHIVE_TOO_LARGE', 'Snapshot archive exceeds size limit');
+      throw new HttpError(
+        413,
+        'SNAPSHOT_ARCHIVE_TOO_LARGE',
+        `Snapshot archive exceeds size limit (${input.archive.sizeBytes} bytes). Limit: ${env.SNAPSHOT_MAX_ARCHIVE_SIZE_BYTES} bytes.`,
+      );
     }
 
     if (input.archive.sizeBytes > env.MAX_REQUEST_SIZE_BYTES) {
-      throw new HttpError(413, 'SNAPSHOT_ARCHIVE_TOO_LARGE', 'Snapshot archive exceeds API body limits');
+      throw new HttpError(
+        413,
+        'SNAPSHOT_ARCHIVE_TOO_LARGE',
+        `Snapshot archive exceeds API body limits (${input.archive.sizeBytes} bytes). Limit: ${env.MAX_REQUEST_SIZE_BYTES} bytes.`,
+      );
     }
 
     if (input.fileCount !== undefined && input.fileCount > env.SNAPSHOT_MAX_FILE_COUNT) {
@@ -1002,7 +1075,11 @@ export class SnapshotsService {
     }
 
     if (buffer.byteLength > env.SNAPSHOT_MAX_ARCHIVE_SIZE_BYTES) {
-      throw new HttpError(413, 'SNAPSHOT_ARCHIVE_TOO_LARGE', 'Snapshot archive exceeds size limit');
+      throw new HttpError(
+        413,
+        'SNAPSHOT_ARCHIVE_TOO_LARGE',
+        `Snapshot archive exceeds size limit (${expectedSizeBytes} bytes). Limit: ${env.SNAPSHOT_MAX_ARCHIVE_SIZE_BYTES} bytes.`,
+      );
     }
 
     return buffer;

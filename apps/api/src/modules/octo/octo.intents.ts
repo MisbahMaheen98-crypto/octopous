@@ -82,6 +82,24 @@ const INTENT_RULES: IntentRule[] = [
     synonyms: ['how', 'recover', 'rollback', 'revert', 'go'],
     minConfidence: 0.6,
   },
+  {
+    intent: 'COMPARE_SNAPSHOTS',
+    keywords: ['compare'],
+    synonyms: ['snapshot', 'snapshots', 'diff', 'difference', 'between', 'what', 'show'],
+    minConfidence: 0.6,
+  },
+  {
+    intent: 'COMPARE_SNAPSHOTS',
+    keywords: ['changed'],
+    synonyms: ['snapshot', 'snapshots', 'between', 'last', 'two', 'what', 'my'],
+    minConfidence: 0.6,
+  },
+  {
+    intent: 'COMPARE_SNAPSHOTS',
+    keywords: ['diff'],
+    synonyms: ['snapshot', 'snapshots', 'between', 'show', 'compare', 'and'],
+    minConfidence: 0.6,
+  },
 
   // BLUEPRINT INTENTS
   {

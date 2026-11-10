@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import yauzl from 'yauzl';
 import yazl from 'yazl';
 
+import { env } from '../../config/env.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { buildDirectoryTreeFromZip } from './snapshots.directory-tree.js';
 import { assertSnapshotTransition } from './snapshots.lifecycle.js';
@@ -1055,7 +1056,7 @@ describe('SnapshotsService', () => {
   });
 
   it('rejects oversized uploads', async () => {
-    const hugeBuffer = Buffer.allocUnsafe(6 * 1024 * 1024).fill(97);
+    const hugeBuffer = Buffer.allocUnsafe(env.SNAPSHOT_MAX_ARCHIVE_SIZE_BYTES + 1024).fill(97);
 
     await expect(
       service.createSnapshot('user_1', 'project_1', {
@@ -1300,6 +1301,26 @@ describe('SnapshotsService', () => {
 
     const blueprint = repository.blueprints.find((item) => item.snapshotId === snapshot.id);
     expect(blueprint?.status).toBe('FAILED');
+  });
+
+  it('processes blueprint using directory tree when physical archive file is missing from storage', async () => {
+    const snapshot = await service.createSnapshot('user_1', 'project_1', {
+      captureSource: 'EXTENSION',
+      archive: {
+        fileName: 'project.zip',
+        contentType: 'application/zip',
+        base64Data: archiveBase64,
+        sizeBytes: archiveBuffer.byteLength,
+      },
+    });
+
+    // Delete the archive from storage so reading it fails
+    storage.archives.delete(snapshot.archiveStorageKey!);
+
+    const result = await service.processSnapshotBlueprint('user_1', 'project_1', snapshot.id);
+    expect(result.blueprint.status).toBe('COMPLETED');
+    expect(result.blueprint.detectedFrameworks).toContain('Node.js');
+    expect(result.blueprint.detectedLanguages).toContain('TypeScript');
   });
 
   it('deletes blueprint and blocks retrieval afterward', async () => {

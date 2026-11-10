@@ -106,14 +106,28 @@ export function SnapshotBlueprintPage() {
 
     const result = await createSnapshotBlueprint(projectId, snapshotId);
 
-    setIsCreating(false);
-
     if (!result.success) {
+      setIsCreating(false);
       setError(result.error.message);
+      await load();
       return;
     }
 
     setPayload(result.data);
+    setIsCreating(false);
+
+    // Auto-trigger processing upon creation
+    setIsProcessing(true);
+    const processResult = await processSnapshotBlueprint(projectId, snapshotId);
+    setIsProcessing(false);
+
+    if (!processResult.success) {
+      setError(processResult.error.message);
+      await load();
+      return;
+    }
+
+    setPayload(processResult.data);
   };
 
   const onProcess = async () => {
@@ -130,6 +144,7 @@ export function SnapshotBlueprintPage() {
 
     if (!result.success) {
       setError(result.error.message);
+      await load();
       return;
     }
 
@@ -161,9 +176,7 @@ export function SnapshotBlueprintPage() {
     return <LoadingState label="Loading blueprint..." />;
   }
 
-  if (error) {
-    return <ErrorState title="Blueprint unavailable" message={error} />;
-  }
+
 
   return (
     <>
@@ -192,7 +205,30 @@ export function SnapshotBlueprintPage() {
         </div>
       </Card>
 
-      {!payload ? (
+      {error && !payload ? (
+        <Card>
+          <ErrorState title="Blueprint unavailable" message={error} />
+          <div className="project-actions" style={{ marginTop: '1rem' }}>
+            <Button type="button" onClick={() => void load()}>
+              Try Again
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => void onProcess()} disabled={isProcessing}>
+              {isProcessing ? 'Processing...' : 'Process Blueprint'}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => void onCreate()} disabled={isCreating}>
+              {isCreating ? 'Creating...' : 'Create Blueprint'}
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
+      {error && payload ? (
+        <Card>
+          <ErrorState title="Blueprint notice" message={error} />
+        </Card>
+      ) : null}
+
+      {!payload && !error ? (
         <Card>
           <EmptyState
             title="Blueprint not created"
@@ -224,8 +260,15 @@ export function SnapshotBlueprintPage() {
               </Button>
             </div>
 
-            {payload.blueprint.status === 'PROCESSING' || payload.blueprint.status === 'PENDING' ? (
-              <LoadingState label="Blueprint processing is in progress." />
+            {payload.blueprint.status === 'PROCESSING' ? (
+              <LoadingState label="Blueprint processing is in progress..." />
+            ) : null}
+
+            {payload.blueprint.status === 'PENDING' ? (
+              <EmptyState
+                title="Blueprint Pending"
+                message="Blueprint record is initialized. Click 'Process Blueprint' to analyze the snapshot."
+              />
             ) : null}
 
             {payload.blueprint.status === 'FAILED' ? (

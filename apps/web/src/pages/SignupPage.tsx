@@ -36,9 +36,12 @@ export function SignupPage() {
 
     navigate(`/verify-email?email=${encodeURIComponent(email.trim().toLowerCase())}`, {
       state:
+        !import.meta.env.PROD &&
+        result.data.deliveryMode === 'DEVELOPMENT_FALLBACK' &&
         typeof result.data.developmentOtp === 'string'
           ? {
               developmentOtp: result.data.developmentOtp,
+              deliveryMode: result.data.deliveryMode,
             }
           : undefined,
     });

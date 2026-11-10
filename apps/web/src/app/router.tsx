@@ -1,3 +1,4 @@
+import { SupportPage } from '../pages/SupportPage';
 import { createBrowserRouter } from 'react-router-dom';
 
 import { ProtectedRoute } from './auth/ProtectedRoute';
@@ -5,6 +6,7 @@ import { PublicRoute } from './auth/PublicRoute';
 import { AppShell } from './shell/AppShell';
 import { ErrorBoundaryPage } from './ui/ErrorBoundaryPage';
 import { DashboardPage } from '../pages/DashboardPage';
+import { IntegrationGuidePage } from '../pages/IntegrationGuidePage';
 import { LoginPage } from '../pages/LoginPage';
 import { OctoPage } from '../pages/OctoPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
@@ -95,21 +97,11 @@ export const router = createBrowserRouter([
       },
       {
         path: 'integration-guide',
-        element: (
-          <PlaceholderPage
-            title="Integration Guide"
-            description="Extension integration workflows will be expanded in extension phases."
-          />
-        ),
+        element: <IntegrationGuidePage />,
       },
       {
         path: 'support',
-        element: (
-          <PlaceholderPage
-            title="Support"
-            description="Support and help content will be added in later phases."
-          />
-        ),
+        element: <SupportPage />,
       },
       {
         path: 'settings',
@@ -123,3 +115,4 @@ export const router = createBrowserRouter([
     ],
   },
 ]);
+

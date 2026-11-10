@@ -48,7 +48,7 @@ describe('streamed snapshot upload', () => {
       payload: {
         captureSource: 'EXTENSION',
         clientName: 'octopus-vscode-extension',
-        clientVersion: '0.1.1',
+        clientVersion: '0.1.2',
         fileCount: 1,
         directoryCount: 0,
         archive: {
@@ -68,7 +68,7 @@ describe('streamed snapshot upload', () => {
     expect(JSON.parse(capturedBody.toString('utf8'))).toEqual({
       captureSource: 'EXTENSION',
       clientName: 'octopus-vscode-extension',
-      clientVersion: '0.1.1',
+      clientVersion: '0.1.2',
       fileCount: 1,
       directoryCount: 0,
       archive: {

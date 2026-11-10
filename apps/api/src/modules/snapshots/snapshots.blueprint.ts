@@ -21,7 +21,7 @@ type BlueprintComputation = {
 };
 
 type AnalyzeBlueprintOptions = {
-  archiveBuffer: Buffer;
+  archiveBuffer?: Buffer | null;
   maxPathLength: number;
   directoryTree?: SnapshotDirectoryTree | null;
 };
@@ -677,12 +677,20 @@ async function collectZipInsights(options: AnalyzeBlueprintOptions) {
     flattenTreeNodes(options.directoryTree.nodes, filePaths);
   }
 
+  const archiveBuffer = options.archiveBuffer;
+  if (!archiveBuffer || archiveBuffer.length === 0) {
+    return {
+      filePaths,
+      fileContents,
+    };
+  }
+
   await new Promise<void>((resolve, reject) => {
     const fail = (error: unknown) => {
       reject(error instanceof HttpError ? error : new HttpError(400, 'SNAPSHOT_ARCHIVE_INVALID', 'Invalid ZIP archive'));
     };
 
-    yauzl.fromBuffer(options.archiveBuffer, { lazyEntries: true, decodeStrings: true }, (openError, zipFile) => {
+    yauzl.fromBuffer(archiveBuffer, { lazyEntries: true, decodeStrings: true }, (openError, zipFile) => {
       if (openError || !zipFile) {
         fail(openError);
         return;
@@ -698,9 +706,9 @@ async function collectZipInsights(options: AnalyzeBlueprintOptions) {
 
         try {
           normalizedPath = normalizeArchivePath(entry.fileName, options.maxPathLength);
-        } catch (error) {
-          zipFile.close();
-          fail(error);
+        } catch (error: any) {
+          console.warn('[snapshots.blueprint] Skipping invalid archive entry:', (error?.message || error));
+          zipFile.readEntry();
           return;
         }
 
@@ -723,8 +731,8 @@ async function collectZipInsights(options: AnalyzeBlueprintOptions) {
 
         zipFile.openReadStream(entry, (streamError, readStream) => {
           if (streamError || !readStream) {
-            zipFile.close();
-            fail(streamError);
+            console.warn('[snapshots.blueprint] Could not open stream for entry:', streamError?.message);
+            zipFile.readEntry();
             return;
           }
 
@@ -743,8 +751,8 @@ async function collectZipInsights(options: AnalyzeBlueprintOptions) {
           });
 
           readStream.on('error', (streamReadError) => {
-            zipFile.close();
-            fail(streamReadError);
+            console.warn('[snapshots.blueprint] Stream read error:', streamReadError?.message);
+            zipFile.readEntry();
           });
 
           readStream.on('end', () => {

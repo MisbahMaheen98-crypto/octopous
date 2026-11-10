@@ -7,13 +7,14 @@ import { LoadingState } from '../components/states/LoadingState';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
+import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { ProjectColorPicker } from '../components/projects/ProjectColorPicker';
 import { getProjectCardColorClasses } from '../lib/projects/project-colors';
 import { buildCreateProjectInput } from '../lib/projects/project-form';
 import { SearchInput } from '../components/ui/SearchInput';
 import { createProject, listProjects } from '../lib/projects/projects-client';
-import type { Project, ProjectColor } from '../lib/projects/types';
+import type { Project, ProjectColor, ProjectMode } from '../lib/projects/types';
 
 export function resolveProjectCardClasses(project: Pick<Project, 'color'>) {
   return getProjectCardColorClasses(project.color);
@@ -42,6 +43,8 @@ export function ProjectsPage() {
   const [createName, setCreateName] = useState('');
   const [createDescription, setCreateDescription] = useState('');
   const [createColor, setCreateColor] = useState<ProjectColor | null>(null);
+  const [createMode, setCreateMode] = useState<ProjectMode>('INDIVIDUAL');
+  const [createGitUrl, setCreateGitUrl] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -77,6 +80,8 @@ export function ProjectsPage() {
         name: createName,
         description: createDescription,
         color: createColor,
+        mode: createMode,
+        gitRemoteUrl: createGitUrl || undefined,
       }),
     );
 
@@ -91,6 +96,8 @@ export function ProjectsPage() {
     setCreateName('');
     setCreateDescription('');
     setCreateColor(null);
+    setCreateMode('INDIVIDUAL');
+    setCreateGitUrl('');
     await loadProjects();
   };
 
@@ -101,7 +108,7 @@ export function ProjectsPage() {
           <div>
             <h3 className="card-title">Projects</h3>
             <p className="muted body-sm">
-              Create and manage your OCTOPUS projects. Only your own projects are visible.
+              Create and manage your OCTOPUS projects. Admin-controlled optional team collaboration supported.
             </p>
           </div>
           <Button variant="primary" type="button" onClick={() => setIsCreateOpen(true)}>
@@ -146,6 +153,16 @@ export function ProjectsPage() {
                     <div>
                       <h4 className="card-title">{project.name}</h4>
                       <p className="muted body-sm">{project.description || 'No description provided'}</p>
+                      <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                        <Badge tone={project.mode === 'COLLABORATIVE' ? 'ok' : 'neutral'}>
+                          {project.mode === 'COLLABORATIVE'
+                            ? `👥 Team (${project.memberCount ?? 1})`
+                            : '🔒 Individual'}
+                        </Badge>
+                        {project.userRole && project.userRole !== 'OWNER' && (
+                          <Badge tone="warn">{project.userRole}</Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="project-card-header-side">
@@ -188,6 +205,52 @@ export function ProjectsPage() {
             onChange={(event) => setCreateDescription(event.target.value)}
           />
 
+          <label className="eyebrow">Project Mode</label>
+          <div
+            style={{
+              display: 'flex',
+              gap: '16px',
+              padding: '10px 14px',
+              borderRadius: '6px',
+              backgroundColor: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
+              marginBottom: '12px',
+            }}
+          >
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+              <input
+                type="radio"
+                name="projectMode"
+                checked={createMode === 'INDIVIDUAL'}
+                onChange={() => setCreateMode('INDIVIDUAL')}
+              />
+              <span>🔒 <strong>Individual</strong> (Private to you)</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+              <input
+                type="radio"
+                name="projectMode"
+                checked={createMode === 'COLLABORATIVE'}
+                onChange={() => setCreateMode('COLLABORATIVE')}
+              />
+              <span>👥 <strong>Collaborative</strong> (Team access)</span>
+            </label>
+          </div>
+
+          {createMode === 'COLLABORATIVE' && (
+            <>
+              <label className="eyebrow" htmlFor="project-git-url">
+                Git Repository URL (Optional)
+              </label>
+              <Input
+                id="project-git-url"
+                placeholder="https://github.com/organization/repo.git"
+                value={createGitUrl}
+                onChange={(event) => setCreateGitUrl(event.target.value)}
+              />
+            </>
+          )}
+
           <ProjectColorPicker value={createColor} onChange={setCreateColor} idPrefix="create-project" />
 
           {createError ? <p className="form-error">{createError}</p> : null}
@@ -199,6 +262,8 @@ export function ProjectsPage() {
               onClick={() => {
                 setIsCreateOpen(false);
                 setCreateColor(null);
+                setCreateMode('INDIVIDUAL');
+                setCreateGitUrl('');
               }}
             >
               Cancel

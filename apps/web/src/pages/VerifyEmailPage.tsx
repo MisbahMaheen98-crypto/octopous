@@ -11,7 +11,11 @@ export function VerifyEmailPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const seededEmail = useMemo(() => searchParams.get('email') ?? '', [searchParams]);
+  const isProduction = import.meta.env.PROD;
+
   const seededDevelopmentOtp =
+    !isProduction &&
+    (location.state as { deliveryMode?: unknown } | null)?.deliveryMode === 'DEVELOPMENT_FALLBACK' &&
     typeof (location.state as { developmentOtp?: unknown } | null)?.developmentOtp === 'string'
       ? ((location.state as { developmentOtp?: string }).developmentOtp ?? null)
       : null;
@@ -57,14 +61,18 @@ export function VerifyEmailPage() {
       return;
     }
 
-    if (typeof result.data.developmentOtp === 'string') {
+    if (
+      !isProduction &&
+      result.data.deliveryMode === 'DEVELOPMENT_FALLBACK' &&
+      typeof result.data.developmentOtp === 'string'
+    ) {
       setDevelopmentOtp(result.data.developmentOtp);
       setMessage('Development fallback active: use the OTP shown below.');
       return;
     }
 
     setDevelopmentOtp(null);
-    setMessage('A new verification code has been sent to your email.');
+    setMessage('Verification code sent! Please check your email inbox.');
   };
 
   return (
@@ -101,7 +109,7 @@ export function VerifyEmailPage() {
 
         {error ? <p className="form-error">{error}</p> : null}
         {message ? <p className="form-success">{message}</p> : null}
-        {developmentOtp ? (
+        {!isProduction && developmentOtp ? (
           <p className="form-success mono">Development OTP: {developmentOtp}</p>
         ) : null}
 

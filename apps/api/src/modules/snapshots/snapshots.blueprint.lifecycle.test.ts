@@ -9,6 +9,8 @@ describe('blueprint lifecycle transitions', () => {
     expect(() => assertBlueprintTransition('PROCESSING', 'COMPLETED')).not.toThrow();
     expect(() => assertBlueprintTransition('FAILED', 'PROCESSING')).not.toThrow();
     expect(() => assertBlueprintTransition('COMPLETED', 'PROCESSING')).not.toThrow();
+    expect(() => assertBlueprintTransition('PROCESSING', 'PROCESSING')).not.toThrow();
+    expect(() => assertBlueprintTransition('FAILED', 'FAILED')).not.toThrow();
   });
 
   it('blocks invalid transitions', () => {

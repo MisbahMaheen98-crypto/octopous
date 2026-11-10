@@ -114,6 +114,7 @@ function main() {
   copyRequiredFile('README.md');
   copyRequiredFile('LICENSE.md');
   copyRequiredFile('resources');
+  copyRequiredFile('media');
   copyRequiredFile('out');
   pruneNonRuntimeArtifacts(join(stagingDir, 'out'));
 

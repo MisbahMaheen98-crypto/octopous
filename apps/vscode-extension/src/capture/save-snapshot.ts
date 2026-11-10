@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import * as vscode from 'vscode';
 import type { SnapshotCreateRequest } from '../contracts/snapshot';
 
@@ -153,6 +155,19 @@ export async function runSnapshotCapture(options: {
             progress.report({ message: `Uploading snapshot... ${percentage}%` });
           },
         });
+
+        // Cache the newly captured archive locally for instant offline rollback
+        try {
+          const rootPath = roots[0]?.fsPath;
+          if (rootPath) {
+            const localCacheDir = path.join(rootPath, '.octopus-storage', 'snapshots');
+            await fs.promises.mkdir(localCacheDir, { recursive: true });
+            const localCachePath = path.join(localCacheDir, snapshotResponse.snapshot.id + '.zip');
+            await fs.promises.copyFile(archive.archivePath, localCachePath);
+          }
+        } catch (cacheErr) {
+          // Best effort caching
+        }
 
         progress.report({ message: 'Snapshot saved successfully.' });
 

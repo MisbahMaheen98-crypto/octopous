@@ -62,11 +62,23 @@ export class SnapshotsRepository {
     return prisma.project.findFirst({
       where: {
         id: projectId,
-        ownerId,
+        OR: [
+          { ownerId },
+          {
+            mode: 'COLLABORATIVE',
+            members: { some: { userId: ownerId } },
+          },
+        ],
       },
       select: {
         id: true,
         name: true,
+        ownerId: true,
+        mode: true,
+        members: {
+          where: { userId: ownerId },
+          select: { role: true },
+        },
       },
     });
   }
@@ -107,7 +119,13 @@ export class SnapshotsRepository {
         id: snapshotId,
         projectId,
         project: {
-          ownerId,
+          OR: [
+            { ownerId },
+            {
+              mode: 'COLLABORATIVE',
+              members: { some: { userId: ownerId } },
+            },
+          ],
         },
       },
       include: {
@@ -341,5 +359,17 @@ export class SnapshotsRepository {
     };
 
     await prisma.auditLog.create({ data });
+  }
+
+  async recordActivity(projectId: string, userId: string, action: string, details?: Record<string, unknown>) {
+    const data = {
+      projectId,
+      userId,
+      action,
+      ...(details !== undefined ? { details: details as any } : {}),
+    };
+    return prisma.projectActivity.create({
+      data: data as any,
+    });
   }
 }

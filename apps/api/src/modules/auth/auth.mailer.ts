@@ -10,17 +10,18 @@ import type { AuthDiagnosticLogger } from './auth.types.js';
 const BREVO_EMAIL_API_URL = 'https://api.brevo.com/v3/smtp/email';
 const BREVO_REQUEST_TIMEOUT_MS = 10_000;
 
-class BrevoRequestError extends Error {
+export class BrevoRequestError extends Error {
+  public readonly code?: string | undefined;
+
   constructor(
-    public readonly httpStatus?: number,
-    public readonly providerErrorCode?: string,
-    code?: string,
+    public readonly httpStatus?: number | undefined,
+    public readonly providerErrorCode?: string | undefined,
+    code?: string | undefined,
+    public readonly detailMessage?: string | undefined,
   ) {
-    super('Brevo email API request failed');
+    super(detailMessage ? `Brevo email API request failed: ${detailMessage}` : 'Brevo email API request failed');
     this.name = 'BrevoRequestError';
-    if (code) {
-      Object.defineProperty(this, 'code', { value: code, enumerable: true });
-    }
+    this.code = code;
   }
 }
 
@@ -29,8 +30,26 @@ function getProviderErrorCode(payload: unknown): string | undefined {
     return undefined;
   }
 
-  const code = payload.code;
+  const code = (payload as Record<string, unknown>).code;
   return typeof code === 'string' && /^[A-Z0-9_-]{1,64}$/iu.test(code) ? code : undefined;
+}
+
+function getProviderDetailMessage(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== 'object' || !('message' in payload)) {
+    return undefined;
+  }
+
+  const message = (payload as Record<string, unknown>).message;
+  if (typeof message !== 'string') {
+    return undefined;
+  }
+
+  // Strip potential 6-digit numeric OTP sequences
+  let sanitized = message.replace(/\b\d{6}\b/g, '******');
+  if (sanitized.length > 250) {
+    sanitized = sanitized.slice(0, 250) + '...';
+  }
+  return sanitized;
 }
 
 export type OtpDeliveryResult =
@@ -54,10 +73,21 @@ export class AuthMailer {
     };
   }
 
-  async sendEmailVerificationOtp(input: { email: string; username: string; otp: string }) {
-    if (!env.BREVO_API_KEY || !env.EMAIL_FROM) {
+  async sendEmailVerificationOtp(input: { email: string; username: string; otp: string }): Promise<OtpDeliveryResult> {
+    const hasApiKey = Boolean(env.BREVO_API_KEY);
+    const hasEmailFrom = Boolean(env.EMAIL_FROM);
+
+    if (!hasApiKey || !hasEmailFrom) {
       if (env.NODE_ENV === 'production') {
         throw new HttpError(500, 'EMAIL_PROVIDER_NOT_CONFIGURED', 'Email provider must be configured');
+      }
+
+      if (hasApiKey && !hasEmailFrom) {
+        throw new HttpError(
+          500,
+          'EMAIL_PROVIDER_NOT_CONFIGURED',
+          'Sender email (EMAIL_FROM) is required when Brevo is configured',
+        );
       }
 
       return this.createDevelopmentFallback(input.otp);
@@ -67,6 +97,8 @@ export class AuthMailer {
     const safeMetadata = {
       provider: 'brevo',
       transport: 'https',
+      hasApiKey: true,
+      hasEmailFrom: true,
       recipientDomain: getRecipientDomain(input.email),
     };
     this.logger.info(safeMetadata, 'OTP email send started');
@@ -80,7 +112,7 @@ export class AuthMailer {
         headers: {
           accept: 'application/json',
           'content-type': 'application/json',
-          'api-key': env.BREVO_API_KEY,
+          'api-key': env.BREVO_API_KEY!,
         },
         body: JSON.stringify({
           sender: {
@@ -99,12 +131,15 @@ export class AuthMailer {
 
       if (!response.ok) {
         let providerErrorCode: string | undefined;
+        let detailMessage: string | undefined;
         try {
-          providerErrorCode = getProviderErrorCode(await response.json());
+          const body = await response.json();
+          providerErrorCode = getProviderErrorCode(body);
+          detailMessage = getProviderDetailMessage(body);
         } catch {
           // Do not log response bodies; they may contain recipient or message data.
         }
-        throw new BrevoRequestError(response.status, providerErrorCode, 'BREVO_HTTP_ERROR');
+        throw new BrevoRequestError(response.status, providerErrorCode, 'BREVO_HTTP_ERROR', detailMessage);
       }
 
       this.logger.info(
@@ -125,7 +160,7 @@ export class AuthMailer {
         ...getSafeBrevoErrorMetadata(safeError),
       };
 
-      if (controller.signal.aborted) {
+      if (controller.signal.aborted || (safeError instanceof BrevoRequestError && safeError.code === 'BREVO_HTTP_TIMEOUT')) {
         this.logger.error(failureMetadata, 'OTP email send timed out');
       } else {
         this.logger.error(failureMetadata, 'OTP email send failed');
@@ -135,7 +170,32 @@ export class AuthMailer {
         throw new HttpError(503, 'EMAIL_DELIVERY_FAILED', 'Email delivery failed');
       }
 
-      return this.createDevelopmentFallback(input.otp);
+      let userMessage = 'Email delivery failed';
+      if (safeError instanceof BrevoRequestError) {
+        if (safeError.providerErrorCode === 'unauthorized') {
+          userMessage = safeError.detailMessage?.includes('authorised_ips') || safeError.detailMessage?.includes('unrecognised IP')
+            ? 'Email delivery failed: Brevo IP restriction blocked request. Authorize your IP at https://app.brevo.com/security/authorised_ips'
+            : 'Email delivery failed: Brevo API key is unauthorized.';
+        } else if (
+          safeError.providerErrorCode === 'unverified_sender' ||
+          safeError.detailMessage?.toLowerCase().includes('sender')
+        ) {
+          userMessage = 'Email delivery failed: Brevo sender email is not verified.';
+        } else if (safeError.code === 'BREVO_HTTP_TIMEOUT') {
+          userMessage = 'Email delivery failed: Request to Brevo timed out.';
+        } else if (safeError.detailMessage) {
+          userMessage = `Email delivery failed: ${safeError.detailMessage}`;
+        }
+      } else if (
+        safeError instanceof Error &&
+        (safeError.name === 'AbortError' || (safeError as { code?: string }).code === 'BREVO_HTTP_TIMEOUT')
+      ) {
+        userMessage = 'Email delivery failed: Request to Brevo timed out.';
+      } else if (safeError instanceof Error) {
+        userMessage = `Email delivery failed: ${safeError.message}`;
+      }
+
+      throw new HttpError(503, 'EMAIL_DELIVERY_FAILED', userMessage);
     } finally {
       clearTimeout(timeout);
     }

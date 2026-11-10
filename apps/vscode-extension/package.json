@@ -2,7 +2,7 @@
   "name": "octopus-ghost",
   "displayName": "OCTOPUS Ghost",
   "description": "One-click project snapshot capture from VS Code to OCTOPUS.",
-  "version": "0.1.1",
+  "version": "0.1.6",
   "license": "SEE LICENSE IN LICENSE.md",
   "publisher": "octopus-ghost",
   "icon": "resources/octopus.png",
@@ -35,7 +35,11 @@
     "onCommand:octopus.connectAccount",
     "onCommand:octopus.selectProject",
     "onCommand:octopus.openWebApp",
-    "onView:octopus.workspaceView"
+    "onCommand:octopus.rollbackSnapshot",
+    "onCommand:octopus.compareSnapshot",
+    "onCommand:octopus.refreshSnapshots",
+    "onView:octopus.workspaceView",
+    "onView:octopus.snapshotHistoryView"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -46,11 +50,28 @@
       },
       {
         "command": "octopus.saveSnapshot",
-        "title": "OCTOPUS: Save Snapshot"
+        "title": "OCTOPUS: Save Snapshot",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "octopus.rollbackSnapshot",
+        "title": "OCTOPUS: Rollback to Snapshot",
+        "icon": "$(history)"
+      },
+      {
+        "command": "octopus.compareSnapshot",
+        "title": "OCTOPUS: Compare Snapshot with Workspace",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "octopus.refreshSnapshots",
+        "title": "OCTOPUS: Refresh Snapshots",
+        "icon": "$(refresh)"
       },
       {
         "command": "octopus.connectAccount",
-        "title": "OCTOPUS: Connect Account"
+        "title": "OCTOPUS: Connect Account",
+        "icon": "$(account)"
       },
       {
         "command": "octopus.selectProject",
@@ -66,12 +87,47 @@
         {
           "command": "octopus.saveSnapshot",
           "when": "view == octopus.workspaceView",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "octopus.rollbackSnapshot",
+          "when": "view == octopus.workspaceView || view == octopus.snapshotHistoryView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "octopus.compareSnapshot",
+          "when": "view == octopus.workspaceView || view == octopus.snapshotHistoryView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "octopus.refreshSnapshots",
+          "when": "view == octopus.workspaceView || view == octopus.snapshotHistoryView",
+          "group": "navigation@4"
         },
         {
           "command": "octopus.connectAccount",
           "when": "view == octopus.workspaceView",
-          "group": "navigation@1"
+          "group": "navigation@5"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "octopus.rollbackSnapshot",
+          "when": "viewItem == snapshotItem || viewItem == snapshotItemLatest",
+          "group": "inline@1"
+        },
+        {
+          "command": "octopus.compareSnapshot",
+          "when": "viewItem == snapshotItem || viewItem == snapshotItemLatest",
+          "group": "inline@2"
+        },
+        {
+          "command": "octopus.rollbackSnapshot",
+          "when": "viewItem == snapshotItem || viewItem == snapshotItemLatest"
+        },
+        {
+          "command": "octopus.compareSnapshot",
+          "when": "viewItem == snapshotItem || viewItem == snapshotItemLatest"
         }
       ]
     },
@@ -173,7 +229,7 @@
         {
           "id": "octopus",
           "title": "OCTOPUS",
-          "icon": "resources/octopus.svg"
+          "icon": "media/octopus-activitybar.svg"
         }
       ]
     },
@@ -182,6 +238,10 @@
         {
           "id": "octopus.workspaceView",
           "name": "Workspace"
+        },
+        {
+          "id": "octopus.snapshotHistoryView",
+          "name": "Snapshot History"
         }
       ]
     }
@@ -195,7 +255,8 @@
     "package:vsix": "npm run build && node scripts/package-vsix.mjs"
   },
   "dependencies": {
-    "archiver": "^7.0.1"
+    "archiver": "^7.0.1",
+    "yauzl": "^3.2.0"
   },
   "devDependencies": {
     "@types/archiver": "^8.0.0",

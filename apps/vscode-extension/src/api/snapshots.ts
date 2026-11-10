@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer';
 
 import type { SnapshotCreateRequest, SnapshotRecord } from '../contracts/snapshot';
 
-import { octopusRequestWithStream } from './client';
+import { octopusRequest, octopusRequestBinary, octopusRequestWithStream } from './client';
 
 export async function createSnapshot(options: {
   projectId: string;
@@ -72,5 +72,56 @@ export async function createSnapshot(options: {
     contentLength,
     ...(options.cancellationToken ? { cancellationToken: options.cancellationToken } : {}),
     ...(options.onUploadProgress ? { onUploadProgress: options.onUploadProgress } : {}),
+  });
+}
+
+export async function listSnapshots(options: {
+  projectId: string;
+  cookie: string;
+  timeoutMs?: number;
+  cancellationToken?: { isCancellationRequested: boolean };
+}): Promise<SnapshotRecord[]> {
+  const result = await octopusRequest<{ snapshots: SnapshotRecord[] }>(`/projects/${options.projectId}/snapshots`, {
+    method: 'GET',
+    cookie: options.cookie,
+    timeoutMs: options.timeoutMs ?? 30_000,
+    ...(options.cancellationToken ? { cancellationToken: options.cancellationToken } : {}),
+  });
+
+  return result.snapshots;
+}
+
+export async function getSnapshot(options: {
+  projectId: string;
+  snapshotId: string;
+  cookie: string;
+  timeoutMs?: number;
+  cancellationToken?: { isCancellationRequested: boolean };
+}): Promise<SnapshotRecord> {
+  const result = await octopusRequest<{ snapshot: SnapshotRecord }>(
+    `/projects/${options.projectId}/snapshots/${options.snapshotId}`,
+    {
+      method: 'GET',
+      cookie: options.cookie,
+      timeoutMs: options.timeoutMs ?? 30_000,
+      ...(options.cancellationToken ? { cancellationToken: options.cancellationToken } : {}),
+    },
+  );
+
+  return result.snapshot;
+}
+
+export async function downloadSnapshotArchive(options: {
+  projectId: string;
+  snapshotId: string;
+  cookie: string;
+  timeoutMs?: number;
+  cancellationToken?: { isCancellationRequested: boolean };
+}): Promise<Buffer> {
+  return octopusRequestBinary(`/projects/${options.projectId}/snapshots/${options.snapshotId}/download?raw=true`, {
+    method: 'GET',
+    cookie: options.cookie,
+    timeoutMs: options.timeoutMs ?? 120_000,
+    ...(options.cancellationToken ? { cancellationToken: options.cancellationToken } : {}),
   });
 }

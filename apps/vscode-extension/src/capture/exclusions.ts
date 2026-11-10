@@ -91,7 +91,8 @@ export function createExclusionMatcher(options: {
   return {
     shouldExcludePath(relativePath: string) {
       const normalized = relativePath.replace(/\\/g, '/').replace(/^\.\//, '');
-      return matchers.some((matcher) => matcher.test(normalized));
+      const prefixed = `root/${normalized}`;
+      return matchers.some((matcher) => matcher.test(normalized) || matcher.test(prefixed));
     },
     activePatterns,
   };

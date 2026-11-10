@@ -58,6 +58,52 @@ export async function octopusRequest<T>(path: string, options: ApiRequestOptions
   return result.data;
 }
 
+export async function octopusRequestBinary(path: string, options: ApiRequestOptions = {}): Promise<Buffer> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 60_000);
+
+  const cancellationPoll = setInterval(() => {
+    if (options.cancellationToken?.isCancellationRequested) {
+      controller.abort();
+    }
+  }, 100);
+
+  try {
+    const response = await fetch(`${getApiBaseUrl()}${buildPath(path)}`, {
+      method: options.method ?? 'GET',
+      headers: {
+        'X-Octopus-Client': 'vscode-extension',
+        'User-Agent': 'octopus-vscode-extension',
+        ...(options.cookie ? { Cookie: options.cookie } : {}),
+        ...(options.headers ?? {}),
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      let code = 'REQUEST_FAILED';
+      let message = `Request failed with status ${response.status}`;
+      try {
+        const text = await response.text();
+        const parsed = JSON.parse(text) as ApiEnvelope<unknown>;
+        if (!parsed.success && parsed.error) {
+          code = parsed.error.code;
+          message = parsed.error.message;
+        }
+      } catch {
+        // Fall back to status text
+      }
+      throw new OctopusApiError(response.status, code, message);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } finally {
+    clearTimeout(timeout);
+    clearInterval(cancellationPoll);
+  }
+}
+
 export type StreamingRequestOptions = Omit<ApiRequestOptions, 'body'> & {
   body: AsyncIterable<Uint8Array>;
   contentLength: number;

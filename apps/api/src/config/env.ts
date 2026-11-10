@@ -1,4 +1,10 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import { resolve } from 'node:path';
+
+// Load environment variables from cwd, apps/api, and workspace root
+dotenv.config();
+dotenv.config({ path: resolve(process.cwd(), 'apps/api/.env') });
+dotenv.config({ path: resolve(process.cwd(), '../../.env') });
 
 import { randomBytes } from 'node:crypto';
 
@@ -18,6 +24,7 @@ const envSchema = z.object({
   API_HOST: z.string().default('0.0.0.0'),
   API_PORT: z.preprocess((value) => process.env.PORT?.trim() || value, z.coerce.number().int().positive().default(4000)),
   DATABASE_URL: z.string().min(1).default('postgresql://postgres:postgres@localhost:5432/octopus'),
+  DIRECT_URL: z.string().optional(),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   AUTH_SESSION_SECRET: z.string().min(32).default('dev-session-secret-please-change-in-production-12345'),
   AUTH_OTP_SECRET: z.string().min(32).default('dev-otp-secret-please-change-in-production-123456'),
@@ -41,6 +48,10 @@ const envSchema = z.object({
   SNAPSHOT_STORAGE_LOCAL_ROOT: z.string().min(1).default('.octopus-storage/snapshots'),
   VAULT_ENCRYPTION_KEY: z.string().optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  GEMINI_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  AI_PROVIDER: z.string().optional(),
+  AI_MODEL: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

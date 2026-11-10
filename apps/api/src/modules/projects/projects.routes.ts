@@ -18,10 +18,28 @@ export async function registerProjectRoutes(app: FastifyInstance) {
   const projectsService = new ProjectsService(projectsRepository);
   const controller = createProjectsController(projectsService);
 
+  // Core project operations
   app.post('/projects', { preHandler: requireAuth }, controller.create);
   app.get('/projects', { preHandler: requireAuth }, controller.list);
   app.get('/projects/:id', { preHandler: requireAuth }, controller.getById);
   app.patch('/projects/:id', { preHandler: requireAuth }, controller.update);
   app.delete('/projects/:id', { preHandler: requireAuth }, controller.archive);
   app.delete('/projects/:id/permanent', { preHandler: requireAuth }, controller.deletePermanent);
+
+  // Team collaboration & Member management (Admin controlled)
+  app.get('/projects/:id/members', { preHandler: requireAuth }, controller.listMembers);
+  app.post('/projects/:id/members', { preHandler: requireAuth }, controller.addMember);
+  app.patch('/projects/:id/members/:memberId', { preHandler: requireAuth }, controller.updateMemberRole);
+  app.delete('/projects/:id/members/:memberId', { preHandler: requireAuth }, controller.removeMember);
+  app.patch('/projects/:id/mode', { preHandler: requireAuth }, controller.switchMode);
+
+  // Shared Activity feed & Git synchronization
+  app.get('/projects/:id/activities', { preHandler: requireAuth }, controller.listActivities);
+  app.patch('/projects/:id/git', { preHandler: requireAuth }, controller.updateGitSettings);
+
+  // Real-time Event stream (SSE)
+  app.get('/projects/:id/events', { preHandler: requireAuth }, controller.streamEvents);
+
+  // User search for invitations
+  app.get('/users/search', { preHandler: requireAuth }, controller.searchUsers);
 }

@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root,
+[data-theme="light"],
+.light {
+  --octo-bg: 255 255 255;
+  --octo-sidebar-bg: 249 250 255;
+  --octo-surface: 255 255 255;
+  --octo-card: 255 255 255;
+  --octo-panel: 245 246 250;
+  --octo-border: 229 231 235;
+  --octo-border-hover: 209 213 219;
+  --octo-cyan: 59 130 246;
+  --octo-electric: 37 99 235;
+  --octo-violet: 124 58 237;
+  --octo-orange: 234 88 12;
+  --octo-text: 17 24 39;
+  --octo-muted: 107 114 128;
+  --octo-subtle: 156 163 175;
+  --octo-scrollbar-track: #f9faff;
+  --octo-scrollbar-thumb: #e0e4f0;
+  --octo-scrollbar-thumb-hover: #c4c9dc;
+  color-scheme: light;
+}
+
+[data-theme="dark"],
+.dark {
+  --octo-bg: 11 15 25;
+  --octo-sidebar-bg: 15 23 42;
+  --octo-surface: 15 23 42;
+  --octo-card: 20 29 47;
+  --octo-panel: 27 38 60;
+  --octo-border: 33 46 72;
+  --octo-border-hover: 45 61 94;
+  --octo-cyan: 0 216 230;
+  --octo-electric: 14 165 233;
+  --octo-violet: 129 140 248;
+  --octo-orange: 249 115 22;
+  --octo-text: 241 245 249;
+  --octo-muted: 148 163 184;
+  --octo-subtle: 100 116 139;
+  --octo-scrollbar-track: #0b0f19;
+  --octo-scrollbar-thumb: #1e293b;
+  --octo-scrollbar-thumb-hover: #334155;
+  color-scheme: dark;
+}
+
+@layer base {
+  body {
+    background-color: rgb(var(--octo-bg));
+    color: rgb(var(--octo-text));
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+/* Custom sleek scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--octo-scrollbar-track);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--octo-scrollbar-thumb);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--octo-scrollbar-thumb-hover);
+}

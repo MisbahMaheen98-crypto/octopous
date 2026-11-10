@@ -175,3 +175,5 @@ The API uses PostgreSQL and filesystem snapshot storage. For durable archives, t
 ## 19. Team and Contributions
 
 OCTOPUS is developed by the Ghost Protocol project team. Contributions should include a focused change, relevant tests, and notes on security or data-handling implications. Do not include real `.env` files, API keys, production database credentials, encryption keys, or tokens in commits or pull requests.
+#   o c t o p o u s  
+ 

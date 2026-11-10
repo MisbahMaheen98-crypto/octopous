@@ -1,5 +1,4 @@
 import { z } from 'zod';
-
 import type { OctoPageContext } from './octo.types.js';
 
 export const octoPageContextSchema = z.enum([
@@ -12,11 +11,24 @@ export const octoPageContextSchema = z.enum([
   'SETTINGS',
 ] as const satisfies readonly OctoPageContext[]);
 
+export const chatMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(['user', 'assistant', 'system', 'octo']),
+  content: z.string(),
+  timestamp: z.string(),
+  images: z.array(z.string()).optional(),
+  fileReferences: z.array(z.string()).optional(),
+  isSimulated: z.boolean().optional(),
+});
+
 export const octoRequestSchema = z.object({
-  question: z.string().min(1).max(2000),
-  pageContext: octoPageContextSchema,
-  projectId: z.string().uuid().optional(),
-  snapshotId: z.string().uuid().optional(),
+  question: z.string().min(1).max(5000),
+  pageContext: octoPageContextSchema.optional().default('DASHBOARD'),
+  projectId: z.string().optional(),
+  snapshotId: z.string().optional(),
+  messages: z.array(chatMessageSchema).optional(),
+  images: z.array(z.string()).optional(),
+  selectedModel: z.string().optional(),
 });
 
 export type OctoRequestPayload = z.infer<typeof octoRequestSchema>;

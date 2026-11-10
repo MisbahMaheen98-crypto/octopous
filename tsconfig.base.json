@@ -11,9 +11,8 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
     "paths": {
-      "@octopus/shared": ["packages/shared/src/index.ts"]
+      "@octopus/shared": ["./packages/shared/src/index.ts"]
     }
   }
 }

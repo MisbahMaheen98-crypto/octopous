@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { OctoLogo } from '../../components/octobot/OctoLogo';
 
 import { BrandLogo } from '../../components/branding/BrandLogo';
 import { useAuth } from '../../lib/auth/auth-context';
@@ -35,7 +36,10 @@ export function Sidebar(options?: { onNavigate?: () => void }) {
             className={({ isActive }) => (isActive ? 'active' : undefined)}
             onClick={options?.onNavigate}
           >
-            {item.label}
+            <span className="flex items-center gap-2">
+              {item.path === '/octo' && <OctoLogo size={22} />}
+              {item.label}
+            </span>
           </NavLink>
         ))}
       </nav>

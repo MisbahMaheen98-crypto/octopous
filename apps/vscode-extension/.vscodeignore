@@ -1,7 +1,7 @@
 # Exclude everything by default. Also block VSCE's traversal above this workspace
 # package root when npm workspaces are present.
 **/*
-../**
+../*
 ../../**
 
 # Never package environment files, including parent workspace env files.
@@ -12,35 +12,17 @@
 ../../.env
 ../../.env.*
 
-# Include only compiled extension runtime JavaScript (never maps, tests, or mocks).
-!out/extension.js
-!out/state.js
-!out/config.js
-!out/view/workspace-view.js
-!out/projects/selection.js
-!out/commands/select-project.js
-!out/commands/open-web.js
-!out/commands/connect-account.js
-!out/capture/workspace-scan.js
-!out/capture/workspace-detection.js
-!out/capture/types.js
-!out/capture/save-snapshot.js
-!out/capture/exclusions.js
-!out/capture/archive.js
-!out/contracts/snapshot.js
-!out/auth/session.js
-!out/auth/heartbeat.js
-!out/auth/cookie.js
-!out/api/types.js
-!out/api/snapshots.js
-!out/api/projects.js
-!out/api/client.js
-!out/api/auth.js
+# Include compiled extension runtime JavaScript (never maps, tests, or mocks).
+!out/**/*.js
+out/**/*.test.js
+out/**/*.map
+out/test/**
 
 # Runtime extension assets and Marketplace metadata.
+!media/
+!media/**
 !resources/
-!resources/octopus.png
-!resources/octopus.svg
+!resources/**
 !package.json
 !README.md
 !LICENSE.md
@@ -60,6 +42,7 @@
 **/.github/**
 node_modules/**/test/**
 node_modules/**/tests/**
+node_modules/**/.github/**
 node_modules/**/*.map
 node_modules/**/*.test.js
 node_modules/.package-lock.json

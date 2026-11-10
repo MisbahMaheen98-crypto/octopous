@@ -30,3 +30,33 @@ Thumbs.db
 
 # OCTOPUS runtime snapshot storage
 apps/api/.octopus-storage/
+
+# OCTOPUS runtime snapshot storage
+.octopus-storage/
+**/.octopus-storage/
+
+# Generated analysis and test data
+**/graphify-out/
+**/non-existent-dir-12345/
+**/sample-project/
+scratch/
+
+# VS Code extension development dependencies
+apps/vscode-extension/node_modules-dev/
+
+# Packaged extensions
+*.vsix
+
+# Extension development dependencies
+apps/vscode-extension/node_modules-dev/
+
+# VS Code extension packages
+*.vsix
+
+# OCTOPUS generated test data
+sample-project/
+non-existent-dir-12345/
+scratch/
+
+# Graphify output
+**/graphify-out/

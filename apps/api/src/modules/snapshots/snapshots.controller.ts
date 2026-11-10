@@ -190,8 +190,14 @@ export function createSnapshotsController(service: SnapshotsService) {
       }
 
       const params = snapshotIdParamsSchema.parse(request.params);
+      const query = request.query as { raw?: string } | undefined;
 
-      const result = await service.downloadSnapshotAsZip(request.auth.userId, params.projectId, params.snapshotId);
+      const result = await service.downloadSnapshotAsZip(
+        request.auth.userId,
+        params.projectId,
+        params.snapshotId,
+        { raw: query?.raw === 'true' },
+      );
 
       return reply
         .status(200)

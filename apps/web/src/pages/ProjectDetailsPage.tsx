@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { LoadingState } from '../components/states/LoadingState';
+import { TeamCollaborationCard } from '../components/projects/TeamCollaborationCard';
 import { ProjectColorPicker } from '../components/projects/ProjectColorPicker';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -274,6 +275,8 @@ export function ProjectDetailsPage() {
         {projectDeleteSuccess ? <p className="muted body-sm">{projectDeleteSuccess}</p> : null}
         {projectDeleteError ? <p className="form-error">{projectDeleteError}</p> : null}
       </Card>
+
+      <TeamCollaborationCard project={project} onProjectUpdated={setProject} accentClassName={accentClassName} />
 
       <Card className={accentClassName}>
         <div className="row-between">

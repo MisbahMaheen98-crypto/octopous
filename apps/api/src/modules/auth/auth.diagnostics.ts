@@ -19,6 +19,7 @@ export function getSafeBrevoErrorMetadata(error: unknown): Record<string, unknow
     code?: unknown;
     httpStatus?: unknown;
     providerErrorCode?: unknown;
+    name?: unknown;
   };
 
   const metadata: Record<string, unknown> = {};
@@ -41,6 +42,10 @@ export function getSafeBrevoErrorMetadata(error: unknown): Record<string, unknow
     /^[A-Z0-9_-]{1,64}$/iu.test(brevoError.providerErrorCode)
   ) {
     metadata.providerErrorCode = brevoError.providerErrorCode;
+  }
+
+  if (brevoError.name === 'AbortError' || brevoError.code === 'BREVO_HTTP_TIMEOUT') {
+    metadata.isTimeout = true;
   }
 
   return metadata;

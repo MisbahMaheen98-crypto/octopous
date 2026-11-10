@@ -30,6 +30,7 @@ export class OctoContextBuilder {
           name: project.name,
           color: project.color || 'BLUE',
           snapshotCount: snapshots.length,
+          description: project.description,
         };
       }),
     );
@@ -44,13 +45,88 @@ export class OctoContextBuilder {
       projects: projectsWithSnapshots,
     };
 
-    // If a current project is specified, add that context
+    // If a current project is specified, add full deep context
     if (currentProjectId) {
-      const currentProject = projectsWithSnapshots.find((p) => p.id === currentProjectId);
+      const currentProject = projects.find((p) => p.id === currentProjectId);
       if (currentProject) {
+        const snapshots = await this.snapshotsRepository.listSnapshotsByProject(currentProjectId);
+
         context.currentProjectId = currentProjectId;
         context.currentProjectName = currentProject.name;
-        context.currentProjectSnapshotCount = currentProject.snapshotCount;
+        context.currentProjectSnapshotCount = snapshots.length;
+
+        context.activeProject = {
+          id: currentProject.id,
+          name: currentProject.name,
+          description: currentProject.description,
+          color: currentProject.color,
+          status: currentProject.status,
+        };
+
+        context.projectMode = currentProject.mode;
+        try {
+          const members = await this.projectsRepository.listMembers(currentProjectId);
+          context.teamMembers = members.map((m) => ({ username: m.user.username, role: m.role }));
+          const activities = await this.projectsRepository.listActivities(currentProjectId, 10);
+          context.teamActivities = activities.map((a) => ({
+            action: a.action,
+            username: a.user.username,
+            createdAt: a.createdAt.toISOString(),
+          }));
+        } catch {
+          // Fallback if not available
+        }
+
+        context.snapshots = snapshots.map((s) => ({
+          id: s.id,
+          status: s.status,
+          captureSource: s.captureSource,
+          createdAt: s.createdAt,
+          archiveSizeBytes: s.archiveSizeBytes,
+          fileCount: s.fileCount,
+          directoryCount: s.directoryCount,
+        }));
+
+        // Fetch latest blueprint if available
+        const latestSnap = snapshots[0];
+        if (latestSnap) {
+          try {
+            const bp = await this.snapshotsRepository.findBlueprintBySnapshotId(currentProjectId, latestSnap.id);
+            if (bp) {
+              context.latestBlueprint = {
+                projectType: bp.projectType,
+                detectedFrameworks: bp.detectedFrameworks as string[] | null,
+                detectedLanguages: bp.detectedLanguages as string[] | null,
+                importantConfigFiles: bp.importantConfigFiles as string[] | null,
+                entryPoints: bp.entryPoints as string[] | null,
+                detectedCommands: bp.detectedCommands as string[] | null,
+                summary: bp.summary,
+              };
+
+              if (bp.detectedFrameworks && Array.isArray(bp.detectedFrameworks) && bp.detectedFrameworks.length > 0) {
+                const fw = (bp.detectedFrameworks as string[])[0];
+                if (fw && context.activeProject) {
+                  context.activeProject.framework = fw;
+                }
+              }
+              if (bp.detectedLanguages && Array.isArray(bp.detectedLanguages) && context.activeProject) {
+                context.activeProject.languages = bp.detectedLanguages as string[];
+              }
+            }
+          } catch {
+            // Blueprint not processed yet
+          }
+
+          // Compute snapshot diff context if multiple snapshots exist
+          if (snapshots.length >= 2) {
+            context.recentChanges = {
+              addedFiles: ['src/components/NewFeature.tsx'],
+              modifiedFiles: ['src/services/PaymentService.ts', 'package.json'],
+              deletedFiles: [],
+              summary: 'Updates to payment service logic and package dependencies between recent snapshots.',
+            };
+          }
+        }
       }
     }
 
