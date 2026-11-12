@@ -12,6 +12,7 @@ import type {
   TestExecutionResult,
   ProjectMemoryEntry,
 } from '@octopus/shared';
+import { apiBaseUrl } from '../api/client';
 
 export type {
   OctobotMode,
@@ -196,7 +197,7 @@ export type GraphReport = {
   recommendations?: string[];
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api/v1';
+const API_BASE_URL = apiBaseUrl;
 
 export async function getOctoStatus(): Promise<AiProviderStatus | null> {
   try {

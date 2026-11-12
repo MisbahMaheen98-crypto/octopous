@@ -7,7 +7,7 @@ import { BrandLogo } from '../components/branding/BrandLogo';
 import { useAuth } from '../lib/auth/auth-context';
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, refresh, sessionError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from ?? '/';
@@ -22,24 +22,28 @@ export function LoginPage() {
     setError(null);
     setIsSubmitting(true);
 
-    const result = await login({ emailOrUsername, password });
+    try {
+      const result = await login({ emailOrUsername, password });
 
-    setIsSubmitting(false);
+      if (!result.ok) {
+        if (result.code === 'EMAIL_NOT_VERIFIED') {
+          const query = emailOrUsername.includes('@')
+            ? `?email=${encodeURIComponent(emailOrUsername.toLowerCase())}`
+            : '';
+          navigate(`/verify-email${query}`);
+          return;
+        }
 
-    if (!result.ok) {
-      if (result.code === 'EMAIL_NOT_VERIFIED') {
-        const query = emailOrUsername.includes('@')
-          ? `?email=${encodeURIComponent(emailOrUsername.toLowerCase())}`
-          : '';
-        navigate(`/verify-email${query}`);
+        setError(result.message ?? 'Login failed');
         return;
       }
 
-      setError(result.message ?? 'Login failed');
-      return;
+      navigate(from, { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to reach OCTOPUS API.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    navigate(from, { replace: true });
   };
 
   return (
@@ -49,6 +53,20 @@ export function LoginPage() {
           <BrandLogo variant="full" />
           <div className="brand-sub">Your App&apos;s Black Box Recorder</div>
         </div>
+
+        {sessionError ? (
+          <div className="form-error" role="alert">
+            <p>{sessionError}</p>
+            <button
+              type="button"
+              className="teal"
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', marginTop: '0.25rem' }}
+              onClick={() => void refresh()}
+            >
+              Retry session check
+            </button>
+          </div>
+        ) : null}
 
         <label className="eyebrow" htmlFor="login-email-username">
           Email or username
