@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node", "vitest/globals"],
+    "types": ["node"],
     "module": "Node16",
     "moduleResolution": "Node16",
     "target": "ES2022",

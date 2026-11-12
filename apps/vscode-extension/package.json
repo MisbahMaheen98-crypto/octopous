@@ -247,7 +247,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p .",
+    "build": "tsc -p tsconfig.build.json",
     "watch": "tsc -watch -p .",
     "typecheck": "tsc -p . --noEmit",
     "lint": "eslint src --ext .ts",
