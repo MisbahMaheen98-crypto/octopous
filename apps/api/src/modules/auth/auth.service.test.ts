@@ -64,6 +64,21 @@ class FakeAuthRepository {
     return this.users.find((user) => user.email === identifier || user.username === identifier) ?? null;
   }
 
+  async deletePendingUser(userId: string) {
+    this.otps = this.otps.filter((o) => o.userId !== userId);
+    this.users = this.users.filter((u) => u.id !== userId);
+    return null;
+  }
+
+  async updatePendingUser(userId: string, data: { username?: string; passwordHash?: string }) {
+    const user = this.users.find((u) => u.id === userId);
+    if (!user) throw new Error('Missing user');
+    if (data.username) user.username = data.username;
+    if (data.passwordHash) user.passwordHash = data.passwordHash;
+    user.updatedAt = new Date();
+    return user;
+  }
+
   async createPendingUser(input: { username: string; email: string; passwordHash: string }) {
     const user: UserRecord = {
       id: `user_${this.users.length + 1}`,

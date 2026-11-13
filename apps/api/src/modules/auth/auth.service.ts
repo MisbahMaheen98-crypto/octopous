@@ -50,8 +50,53 @@ export class AuthService {
       this.repository.findUserByUsername(username),
     ]);
 
-    if (existingByEmail || existingByUsername) {
-      throw new HttpError(409, 'ACCOUNT_EXISTS', 'Unable to create account with these credentials');
+    if (existingByEmail) {
+      if (existingByEmail.emailVerifiedAt) {
+        throw new HttpError(409, 'ACCOUNT_EXISTS', 'An account with this email already exists. Please sign in.');
+      }
+
+      const isRecentPending = Date.now() - existingByEmail.createdAt.getTime() < 60 * 60 * 1000;
+
+      // If pending user was created recently and a different username is attempted, reject collision
+      if (isRecentPending && existingByEmail.username !== username) {
+        throw new HttpError(409, 'ACCOUNT_EXISTS', 'An account with this email already exists.');
+      }
+
+      // If requested username belongs to another existing verified account
+      if (existingByUsername && existingByUsername.id !== existingByEmail.id && existingByUsername.emailVerifiedAt) {
+        throw new HttpError(409, 'ACCOUNT_EXISTS', 'Username is already taken by another account.');
+      }
+
+      // Allow the pending user to retry registration, update their credentials, and re-issue verification OTP
+      const passwordHash = await hashPassword(input.password);
+      const user = await this.repository.updatePendingUser(existingByEmail.id, {
+        username,
+        passwordHash,
+      });
+
+      const otpDelivery = await this.issueVerificationOtp(user.id, user.email, user.username);
+
+      await this.repository.createAuditLog({
+        userId: user.id,
+        action: 'AUTH_SIGNUP_RESUMED',
+      });
+
+      return {
+        user: this.repository.toPublicUser(user),
+        otpSent: true,
+        ...(env.NODE_ENV !== 'production' &&
+        'deliveryMode' in otpDelivery &&
+        otpDelivery.deliveryMode === 'DEVELOPMENT_FALLBACK'
+          ? {
+              developmentOtp: otpDelivery.developmentOtp,
+              deliveryMode: otpDelivery.deliveryMode,
+            }
+          : {}),
+      };
+    }
+
+    if (existingByUsername) {
+      throw new HttpError(409, 'ACCOUNT_EXISTS', 'Username is already taken. Please choose another username.');
     }
 
     const passwordHash = await hashPassword(input.password);
@@ -62,7 +107,14 @@ export class AuthService {
       passwordHash,
     });
 
-    const otpDelivery = await this.issueVerificationOtp(user.id, user.email, user.username);
+    let otpDelivery: OtpDeliveryResult;
+    try {
+      otpDelivery = await this.issueVerificationOtp(user.id, user.email, user.username);
+    } catch (deliveryError) {
+      // Clean up newly created pending user if OTP delivery fails so retrying won't hit duplicate collisions
+      await this.repository.deletePendingUser(user.id).catch(() => {});
+      throw deliveryError;
+    }
 
     await this.repository.createAuditLog({
       userId: user.id,

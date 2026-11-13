@@ -61,6 +61,18 @@ export class AuthRepository {
     });
   }
 
+  async deletePendingUser(userId: string) {
+    await prisma.emailOtpChallenge.deleteMany({ where: { userId } }).catch(() => {});
+    return prisma.user.delete({ where: { id: userId, emailVerifiedAt: null } }).catch(() => null);
+  }
+
+  async updatePendingUser(userId: string, data: { username?: string; passwordHash?: string }) {
+    return prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+  }
+
   async markEmailVerified(userId: string) {
     return prisma.user.update({
       where: { id: userId },
