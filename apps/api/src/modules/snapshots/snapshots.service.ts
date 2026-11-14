@@ -6,7 +6,7 @@ import yauzl from 'yauzl';
 import { env } from '../../config/env.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { assertSafeRelativePath } from '../../core/security/secure-file-path.js';
-import { maskSecretValue } from '../secrets/secrets.crypto.js';
+import { decryptSnapshotArchive, encryptSnapshotArchive, maskSecretValue } from '../secrets/secrets.crypto.js';
 import { detectSecretsFromArchive } from '../secrets/secrets.detection.js';
 import { isEnvFilePath, shouldFullyMaskValue, shouldMaskForSnapshot } from '../secrets/secrets.protection-policy.js';
 import type { SecretsService } from '../secrets/secrets.service.js';
@@ -739,9 +739,25 @@ export class SnapshotsService {
       try {
         archiveBuffer = await this.storage.readArchive(snapshot.archiveStorageKey);
       } catch (storageError: any) {
-        console.warn(
-          `[SnapshotsService] Snapshot archive could not be read from storage (${snapshot.archiveStorageKey}): ${storageError?.message}. Falling back to directory tree metadata.`,
-        );
+        const rawArchiveData = (snapshot as { archiveData?: Buffer | null }).archiveData;
+        if (
+          (storageError?.code === 'ENOENT' || storageError?.name === 'HttpError') &&
+          rawArchiveData &&
+          Buffer.isBuffer(rawArchiveData) &&
+          rawArchiveData.length > 0
+        ) {
+          try {
+            archiveBuffer = decryptSnapshotArchive(rawArchiveData);
+          } catch {
+            archiveBuffer = null;
+          }
+        }
+
+        if (!archiveBuffer) {
+          console.warn(
+            `[SnapshotsService] Snapshot archive could not be read from storage (${snapshot.archiveStorageKey}): ${storageError?.message}. Falling back to directory tree metadata.`,
+          );
+        }
       }
 
       const metadata = this.parseCaptureMetadata(snapshot.captureMetadata);
@@ -870,23 +886,37 @@ export class SnapshotsService {
       );
     }
 
-    let archiveBuffer: Buffer;
+    let archiveBuffer: Buffer | null = null;
     try {
       archiveBuffer = await this.storage.readArchive(snapshot.archiveStorageKey);
-    } catch (error: any) {
-      if (error instanceof HttpError) {
-        throw error;
+    } catch (storageError: any) {
+      const rawArchiveData = (snapshot as { archiveData?: Buffer | null }).archiveData;
+      if (rawArchiveData && Buffer.isBuffer(rawArchiveData) && rawArchiveData.length > 0) {
+        try {
+          archiveBuffer = decryptSnapshotArchive(rawArchiveData);
+        } catch {
+          archiveBuffer = null;
+        }
       }
 
-      if (error?.code === 'ENOENT') {
-        throw new HttpError(
-          404,
-          'SNAPSHOT_ARCHIVE_NOT_FOUND',
-          `Snapshot archive '${snapshot.archiveStorageKey}' was not found in storage. It may have been stored on an ephemeral server instance or moved.`,
-        );
-      }
+      if (!archiveBuffer) {
+        if (
+          storageError instanceof HttpError ||
+          (storageError && typeof storageError === 'object' && ('statusCode' in storageError || storageError.name === 'HttpError'))
+        ) {
+          throw storageError;
+        }
 
-      throw new HttpError(500, 'SNAPSHOT_DOWNLOAD_FAILED', `Failed to read snapshot archive: ${error?.message || error}`);
+        if (storageError?.code === 'ENOENT' || (typeof storageError?.message === 'string' && storageError.message.includes('ENOENT'))) {
+          throw new HttpError(
+            404,
+            'SNAPSHOT_ARCHIVE_NOT_FOUND',
+            `Snapshot archive '${snapshot.archiveStorageKey}' was not found in storage. It may have been stored on an ephemeral server instance or moved.`,
+          );
+        }
+
+        throw new HttpError(500, 'SNAPSHOT_DOWNLOAD_FAILED', `Failed to read snapshot archive: ${storageError?.message || storageError}`);
+      }
     }
 
     const project = await this.repository.findProjectByIdForOwner(ownerId, projectId);
@@ -1110,11 +1140,13 @@ export class SnapshotsService {
       processedAt: new Date().toISOString(),
     });
 
+    const encryptedForDb = encryptSnapshotArchive(archiveBuffer);
     await this.repository.updateSnapshot(projectId, snapshotId, {
       status: 'COMPLETED',
       archiveStorageKey: storageResult.storageKey,
       archiveContentType: input.archive.contentType,
       archiveSizeBytes: storageResult.sizeBytes,
+      archiveData: encryptedForDb,
       integrityAlgorithm: storageResult.integrityAlgorithm,
       integrityHash: storageResult.integrityHash,
       failureCode: null,

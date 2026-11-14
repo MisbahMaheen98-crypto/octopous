@@ -280,22 +280,30 @@ export async function executeProjectRollback(
   // 3. Retrieve snapshot archive from local storage cache or API
   let archiveBuffer: Buffer | null = null;
   const localCachePath = path.join(workspaceRoot, '.octopus-storage', 'snapshots', `${snapshot.id}.zip`);
+  const candidateCachePaths = [
+    localCachePath,
+    path.join(workspaceRoot, '.octopus-storage', 'snapshots', snapshot.archiveStorageKey || ''),
+    path.join(os.homedir(), '.octopus-storage', 'snapshots', `${snapshot.id}.zip`),
+  ];
 
-  try {
-    if (fs.existsSync(localCachePath)) {
-      const cached = await fs.promises.readFile(localCachePath);
-      // Verify integrity of cached archive
-      if (snapshot.integrityHash) {
-        const hash = crypto.createHash('sha256').update(cached).digest('hex');
-        if (hash.toLowerCase() === snapshot.integrityHash.toLowerCase()) {
+  for (const candidatePath of candidateCachePaths) {
+    try {
+      if (candidatePath && fs.existsSync(candidatePath)) {
+        const cached = await fs.promises.readFile(candidatePath);
+        if (snapshot.integrityHash) {
+          const hash = crypto.createHash('sha256').update(cached).digest('hex');
+          if (hash.toLowerCase() === snapshot.integrityHash.toLowerCase()) {
+            archiveBuffer = cached;
+            break;
+          }
+        } else {
           archiveBuffer = cached;
+          break;
         }
-      } else {
-        archiveBuffer = cached;
       }
+    } catch {
+      // Continue to next candidate
     }
-  } catch {
-    archiveBuffer = null;
   }
 
   if (!archiveBuffer) {
@@ -315,10 +323,18 @@ export async function executeProjectRollback(
       } catch {
         // Ignore cache write failure
       }
-    } catch (downloadErr) {
-      if (downloadErr instanceof OctopusApiError && downloadErr.statusCode === 404) {
+    } catch (downloadErr: any) {
+      const isNotFound =
+        (downloadErr instanceof OctopusApiError && downloadErr.statusCode === 404) ||
+        downloadErr?.statusCode === 404 ||
+        downloadErr?.errorCode === 'SNAPSHOT_ARCHIVE_NOT_FOUND' ||
+        (typeof downloadErr?.message === 'string' &&
+          (downloadErr.message.includes('SNAPSHOT_ARCHIVE_NOT_FOUND') ||
+            downloadErr.message.includes('was not found in storage')));
+
+      if (isNotFound) {
         throw new Error(
-          `Snapshot archive not found on server. This snapshot may have been created on an ephemeral cloud instance that restarted. Please capture a new snapshot to create a permanent rollback restore point.`,
+          `Snapshot archive not found on server. This snapshot may have been created on an ephemeral cloud instance that restarted. Please capture a new snapshot in this workspace to create a permanent rollback restore point.`,
         );
       }
       throw new Error(

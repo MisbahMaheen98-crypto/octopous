@@ -10,7 +10,7 @@
     "type": "git",
     "url": "https://github.com/Afifacoding/octopus"
   },
-  "homepage": "https://octopus-web-r33z.onrender.com",
+  "homepage": "https://octopus-web-ecdc.onrender.com",
   "bugs": {
     "url": "https://github.com/Afifacoding/octopus/issues"
   },
@@ -156,7 +156,7 @@
         },
         "octopus.productionApiBaseUrl": {
           "type": "string",
-          "default": "https://octopus-api-bnh6.onrender.com/api/v1",
+          "default": "https://octopus-api-yuc1.onrender.com/api/v1",
           "description": "Production OCTOPUS API URL"
         },
         "octopus.webBaseUrl": {

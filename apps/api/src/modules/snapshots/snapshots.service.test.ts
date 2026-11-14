@@ -86,6 +86,7 @@ type SnapshotRecord = {
   archiveStorageKey: string | null;
   archiveContentType: string | null;
   archiveSizeBytes: number | null;
+  archiveData?: Buffer | null;
   fileCount: number | null;
   directoryCount: number | null;
   integrityAlgorithm: string | null;
@@ -230,6 +231,7 @@ class FakeSnapshotsRepository {
       archiveStorageKey?: string;
       archiveContentType?: string;
       archiveSizeBytes?: number;
+      archiveData?: Buffer;
       integrityAlgorithm?: string;
       integrityHash?: string;
       failureCode?: string | null;
@@ -259,6 +261,10 @@ class FakeSnapshotsRepository {
 
     if (input.archiveSizeBytes !== undefined) {
       record.archiveSizeBytes = input.archiveSizeBytes;
+    }
+
+    if (input.archiveData !== undefined) {
+      record.archiveData = input.archiveData;
     }
 
     if (input.integrityAlgorithm !== undefined) {

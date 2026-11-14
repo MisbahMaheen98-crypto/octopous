@@ -263,8 +263,20 @@ export async function handleRollbackCommand(
       return;
     }
 
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes('Snapshot archive not found on server')) {
+      const action = await vscode.window.showErrorMessage(
+        `Rollback failed: ${msg}`,
+        'Capture New Snapshot',
+      );
+      if (action === 'Capture New Snapshot') {
+        await vscode.commands.executeCommand('octopus.saveSnapshot');
+      }
+      return;
+    }
+
     vscode.window.showErrorMessage(
-      `Rollback failed: ${error instanceof Error ? error.message : String(error)}`,
+      `Rollback failed: ${msg}`,
     );
   }
 }

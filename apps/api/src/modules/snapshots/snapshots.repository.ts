@@ -27,6 +27,7 @@ type SnapshotUpdateRecordInput = {
   archiveStorageKey?: string;
   archiveContentType?: string;
   archiveSizeBytes?: number;
+  archiveData?: Buffer;
   integrityAlgorithm?: string;
   integrityHash?: string;
   failureCode?: string | null;
@@ -139,6 +140,27 @@ export class SnapshotsRepository {
       where: {
         projectId,
       },
+      select: {
+        id: true,
+        projectId: true,
+        status: true,
+        captureSource: true,
+        clientName: true,
+        clientVersion: true,
+        archiveStorageKey: true,
+        archiveContentType: true,
+        archiveSizeBytes: true,
+        fileCount: true,
+        directoryCount: true,
+        integrityAlgorithm: true,
+        integrityHash: true,
+        failureCode: true,
+        failureReason: true,
+        captureMetadata: true,
+        processedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
       orderBy: {
         createdAt: 'desc',
       },
@@ -151,6 +173,7 @@ export class SnapshotsRepository {
       ...(input.archiveStorageKey !== undefined ? { archiveStorageKey: input.archiveStorageKey } : {}),
       ...(input.archiveContentType !== undefined ? { archiveContentType: input.archiveContentType } : {}),
       ...(input.archiveSizeBytes !== undefined ? { archiveSizeBytes: input.archiveSizeBytes } : {}),
+      ...(input.archiveData !== undefined ? { archiveData: new Uint8Array(input.archiveData) } : {}),
       ...(input.integrityAlgorithm !== undefined ? { integrityAlgorithm: input.integrityAlgorithm } : {}),
       ...(input.integrityHash !== undefined ? { integrityHash: input.integrityHash } : {}),
       ...(input.failureCode !== undefined ? { failureCode: input.failureCode } : {}),

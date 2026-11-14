@@ -30,5 +30,6 @@ export class OctopusApiError extends Error {
   ) {
     super(message);
     this.name = 'OctopusApiError';
+    Object.setPrototypeOf(this, OctopusApiError.prototype);
   }
 }

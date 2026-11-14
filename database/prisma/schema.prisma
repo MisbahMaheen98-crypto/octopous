@@ -108,6 +108,7 @@ model Snapshot {
   archiveStorageKey  String?
   archiveContentType String?
   archiveSizeBytes   Int?
+  archiveData        Bytes?
   fileCount          Int?
   directoryCount     Int?
   integrityAlgorithm String?
